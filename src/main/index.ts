@@ -2,8 +2,91 @@ import { app, shell, BrowserWindow, ipcMain } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
+import http from 'http'
+import fs from 'fs'
+import { extname } from 'path'
 
-function createWindow(): void {
+let server: http.Server | null = null
+
+// MIME type mapping
+const mimeTypes: Record<string, string> = {
+  '.html': 'text/html',
+  '.js': 'application/javascript',
+  '.css': 'text/css',
+  '.json': 'application/json',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.gif': 'image/gif',
+  '.svg': 'image/svg+xml',
+  '.ico': 'image/x-icon',
+  '.woff': 'font/woff',
+  '.woff2': 'font/woff2',
+  '.ttf': 'font/ttf',
+  '.eot': 'application/vnd.ms-fontobject'
+}
+
+function getMimeType(filePath: string): string {
+  const ext = extname(filePath).toLowerCase()
+  return mimeTypes[ext] || 'application/octet-stream'
+}
+
+function createServer(): Promise<void> {
+  // If server already exists, resolve immediately
+  if (server) {
+    return Promise.resolve()
+  }
+
+  return new Promise((resolve, reject) => {
+    const rendererPath = join(__dirname, '../renderer')
+
+    server = http.createServer((req, res) => {
+      let filePath = rendererPath
+
+      // Handle root path
+      if (req.url === '/' || req.url === '/index.html') {
+        filePath = join(rendererPath, 'index.html')
+      } else {
+        // Handle other paths (assets, etc.)
+        filePath = join(rendererPath, req.url || '')
+      }
+
+      // Security: prevent directory traversal
+      if (!filePath.startsWith(rendererPath)) {
+        res.writeHead(403)
+        res.end('Forbidden')
+        return
+      }
+
+      fs.readFile(filePath, (err, data) => {
+        if (err) {
+          if (err.code === 'ENOENT') {
+            res.writeHead(404, { 'Content-Type': 'text/plain' })
+            res.end('Not found')
+          } else {
+            res.writeHead(500, { 'Content-Type': 'text/plain' })
+            res.end('Server error')
+          }
+          return
+        }
+
+        const mimeType = getMimeType(filePath)
+        res.writeHead(200, { 'Content-Type': mimeType })
+        res.end(data)
+      })
+    })
+
+    server.listen(3000, '127.0.0.1', () => {
+      console.log('HTTP server running on http://127.0.0.1:3000')
+      resolve()
+    })
+
+    server.on('error', (err) => {
+      reject(err)
+    })
+  })
+}
+
+async function createWindow(): Promise<void> {
   // Create the browser window.
   const mainWindow = new BrowserWindow({
     width: 900,
@@ -27,15 +110,14 @@ function createWindow(): void {
   })
 
   // HMR for renderer base on electron-vite cli.
-  // Load the remote URL for development or the local html file for production.
+  // Load the remote URL for development or use HTTP server for production.
   if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
     mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
   } else {
-    mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
+    // Start HTTP server and load via HTTP to ensure window.location.protocol is 'http:'
+    await createServer()
+    mainWindow.loadURL('http://127.0.0.1:3000/')
   }
-
-  // [DEBUG] Open DevTools
-  mainWindow.webContents.openDevTools()
 }
 
 // This method will be called when Electron has finished
@@ -70,6 +152,14 @@ app.whenReady().then(() => {
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit()
+  }
+})
+
+// Clean up HTTP server on app quit
+app.on('before-quit', () => {
+  if (server) {
+    server.close()
+    server = null
   }
 })
 
