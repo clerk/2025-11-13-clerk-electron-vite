@@ -1,34 +1,36 @@
-# clerk-electron-vite
+# 2025-11-13 Clerk Electron Vite
 
-An Electron application with React and TypeScript
+This is a small electron app to prove out using Clerk **Development** PK with an Electron app in two scenarios.
 
-## Recommended IDE Setup
+- a development Electron app
+- a MacOS executable
 
-- [VSCode](https://code.visualstudio.com/) + [ESLint](https://marketplace.visualstudio.com/items?itemName=dbaeumer.vscode-eslint) + [Prettier](https://marketplace.visualstudio.com/items?itemName=esbenp.prettier-vscode)
+> [!CAUTION]
+> This is only for debugging and investigative purposes.
 
-## Project Setup
+## Running
 
-### Install
+Make sure you have your publishable key set
 
-```bash
-$ npm install
+```
+#.env
+VITE_CLERK_PUBLISHABLE_KEY=pk_test_FIXME
 ```
 
-### Development
+Run the development app
 
-```bash
-$ npm run dev
+```console
+user@~: $ npm run dev
 ```
 
-### Build
+Build and run the MacOS executable
 
-```bash
-# For windows
-$ npm run build:win
+```console
+user@~: $ npm run build:mac
 
-# For macOS
-$ npm run build:mac
-
-# For Linux
-$ npm run build:linux
+user@~: $ ./dist/mac-arm64/clerk-electron-vite.app/Contents/MacOS/clerk-electron-vite
 ```
+
+For both cases, Clerk _should load_, and the app should display the SignIn component:
+
+![Clerk screenshot](./docs/main.jpg)
