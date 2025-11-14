@@ -3,18 +3,33 @@ import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 
+import { channels } from '../shared/channels'
+
 function createWindow(): void {
   // Create the browser window.
   const mainWindow = new BrowserWindow({
     width: 900,
-    height: 670,
+    height: 870,
     show: false,
     autoHideMenuBar: true,
+
+    // NOTE: Don't actually use this in production.
+    // Just printing the env + not-private PK for demonstrative purposes.
+    // This also does not update during HMR.
+    title:
+      (is.dev ? 'Mode: DEV | PK: ' : 'Mode: PROD | PK: ') +
+      import.meta.env.VITE_CLERK_PUBLISHABLE_KEY,
     ...(process.platform === 'linux' ? { icon } : {}),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false
     }
+  })
+
+  // How do I change the name of the electron window?
+  // https://github.com/electron/electron/issues/2543#issuecomment-420513776
+  mainWindow.on('page-title-updated', function (e) {
+    e.preventDefault()
   })
 
   mainWindow.on('ready-to-show', () => {
@@ -75,3 +90,53 @@ app.on('window-all-closed', () => {
 
 // In this file you can include the rest of your app's specific main process
 // code. You can also put them in separate files and require them here.
+
+/**
+ * Clerk token cache
+ */
+let _token: string | null = null
+
+// Main process IPC Handlers
+ipcMain.on(channels.AUTH_TOKEN_SET, (_event, token) => {
+  console.log('[main] auth:token:set')
+  _token = token
+})
+
+ipcMain.handle(channels.AUTH_TOKEN_GET, async () => {
+  console.log('[main] auth:token:get')
+  return _token
+})
+
+ipcMain.on(channels.AUTH_TOKEN_CLEAR, () => {
+  console.log('[main] auth:token:clear')
+  _token = null
+})
+
+// HTTP proxy handler - forwards HTTP requests from renderer to main process
+ipcMain.handle(channels.HTTP_REQUEST, async (_event, options) => {
+  const { url, method = 'GET', headers = {}, body } = options
+
+  try {
+    const res = await fetch(url, { method, headers, body })
+    const text = await res.text()
+
+    return {
+      ok: res.ok,
+      status: res.status,
+      statusText: res.statusText,
+      headers: Object.fromEntries(res.headers.entries()),
+      body: text
+    }
+  } catch (error) {
+    console.error('[main] http:request error', url, error)
+    // Return error information in a structured way
+    return {
+      ok: false,
+      status: 0,
+      statusText: error instanceof Error ? error.message : 'Unknown error',
+      headers: {},
+      body: '',
+      error: error instanceof Error ? error.message : String(error)
+    }
+  }
+})

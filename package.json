@@ -21,6 +21,7 @@
     "build:linux": "electron-vite build && electron-builder --linux"
   },
   "dependencies": {
+    "@clerk/clerk-js": "^5.108.0",
     "@clerk/clerk-react": "^5.55.0",
     "@electron-toolkit/preload": "^3.0.2",
     "@electron-toolkit/utils": "^4.0.0",
@@ -44,6 +45,7 @@
     "prettier": "^3.6.2",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
+    "selfsigned": "^4.0.0",
     "typescript": "^5.9.2",
     "vite": "^7.1.6"
   }
